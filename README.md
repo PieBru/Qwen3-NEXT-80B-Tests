@@ -222,7 +222,7 @@ Contributions are welcome! Please:
 ## 📞 Support
 
 For issues and questions:
-- GitHub Issues: [repository issues URL]
+- GitHub Issues: https://github.com/PieBru/Qwen3-NEXT-80B-Tests/issues
 - Documentation: See `/docs` directory
 
 ---
