@@ -2,6 +2,8 @@
 
 A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct with MoE-aware memory management, achieving 8-12 tokens/second on RTX-4090 (16GB VRAM) + 100GB DDR5 RAM.
 
+> **Note**: This is an experimental implementation while waiting for llama.cpp support. We're using BitsAndBytes 4-bit quantization with MoE-aware memory management for efficient inference.
+
 ## 🚀 Features
 
 - **MoE-Optimized Memory Management**: Intelligent placement of non-expert components in VRAM and experts in system RAM
