@@ -151,7 +151,6 @@ class TestDependencyInstallation(unittest.TestCase):
     def test_accelerate_available(self):
         """Test that accelerate is available for device mapping"""
         try:
-            import accelerate
             from accelerate import init_empty_weights, load_checkpoint_and_dispatch
             self.assertTrue(callable(init_empty_weights))
             self.assertTrue(callable(load_checkpoint_and_dispatch))

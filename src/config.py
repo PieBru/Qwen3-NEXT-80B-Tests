@@ -24,8 +24,8 @@ class ModelConfig:
 class MemoryConfig:
     """Memory allocation configuration"""
     # GPU VRAM allocation
-    gpu_memory_gb: float = 14.0  # Leave 2GB headroom on RTX 4090 16GB
-    gpu_reserved_gb: float = 2.0  # Reserved for KV cache and activations
+    gpu_memory_gb: float = 10.0  # Conservative allocation to avoid CUDA OOM (was 14.0)
+    gpu_reserved_gb: float = 4.0  # Increased reserved space for KV cache and activations
 
     # CPU RAM allocation
     cpu_memory_gb: float = 90.0  # Use 90GB of 100+ available

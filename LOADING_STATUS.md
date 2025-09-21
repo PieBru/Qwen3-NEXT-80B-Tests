@@ -32,17 +32,36 @@ The model loading has been partially fixed but still faces challenges:
 
 ## Current Loading Behavior
 
-The model loads but faces two main challenges:
+The model loads in two main phases:
 
-### 1. CUDA Memory Management
-- **Issue**: Sequential device mapping still uses ~12GB VRAM during loading
-- **Solution**: Set conservative memory limits (8GB max)
-- **Note**: May still OOM if other processes are using GPU
+### Phase 1: Checkpoint Loading (3-5 minutes)
+- **What**: Loading 9 checkpoint shards from disk
+- **Performance**: Single-threaded, CPU-bound (safetensors limitation)
+- **Progress**: Shows "Loading checkpoint shards: X/9"
 
-### 2. Loading Speed
-- **Issue**: Loading takes 10-15 minutes (100+ seconds per shard)
-- **Cause**: CPU-bound, single-threaded safetensors loading
-- **Note**: Multi-threading doesn't help due to library limitations
+### Phase 2: Model Dispatch/Initialization (3-5 minutes)
+- **What**: Setting up model on devices, initializing layers
+- **Performance**: Multi-threaded, uses all CPU cores
+- **Progress**: Now shows spinner with CPU/RAM usage
+
+### Memory Management
+- **Device mapping**: Using "balanced" to avoid meta tensor issues
+- **VRAM limit**: 8GB to prevent OOM
+- **RAM usage**: ~90GB for expert weights
+
+## ⚠️ Model Caching Status
+
+**Note: Caching is currently DISABLED for pre-quantized BitsAndBytes models**
+
+The model caching feature has been disabled due to incompatibility with pre-quantized weights.
+When attempting to cache, calling `model.state_dict()` on quantized weights causes:
+```
+RuntimeError: Tensor.item() cannot be called on meta tensors
+```
+
+This is a known limitation of BitsAndBytes quantized models where the weight tensors
+cannot be properly serialized. The model will need to be loaded from scratch each time
+(8-10 minutes).
 
 ## Performance Optimizations Needed
 

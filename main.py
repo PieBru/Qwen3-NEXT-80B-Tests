@@ -59,6 +59,11 @@ def main():
     profile_parser = subparsers.add_parser('profile', help='Profile expert usage')
     profile_parser.add_argument('--samples', type=int, default=100, help='Number of samples')
 
+    # Cache management commands
+    cache_parser = subparsers.add_parser('cache', help='Manage model cache')
+    cache_parser.add_argument('--clear', action='store_true', help='Clear model cache')
+    cache_parser.add_argument('--info', action='store_true', help='Show cache information')
+
     # Common arguments
     parser.add_argument('--log-level', default='INFO', help='Logging level')
     parser.add_argument('--config', help='Config file path')
@@ -121,6 +126,9 @@ def main():
 
     elif args.command == 'profile':
         run_profiling(config, args.samples)
+
+    elif args.command == 'cache':
+        manage_cache(config, args.clear, args.info)
 
     else:
         parser.print_help()
@@ -261,6 +269,41 @@ def run_generation(
     cache_stats = loader.expert_cache_manager.get_cache_stats()
     print(f"Cached experts: {cache_stats['cached_experts']}")
     print(f"Cache hit rate: {cache_stats.get('cache_hit_rate', 0):.2%}")
+
+
+def manage_cache(config: SystemConfig, clear: bool, info: bool):
+    """Manage model cache"""
+    logger = logging.getLogger(__name__)
+    cache_path = config.cache_dir / "model_cache" / "initialized_model.pt"
+
+    if info:
+        # Show cache information
+        if cache_path.exists():
+            size_mb = cache_path.stat().st_size / (1024 * 1024)
+            import datetime
+            mtime = datetime.datetime.fromtimestamp(cache_path.stat().st_mtime)
+            print(f"\n{'='*50}")
+            print("Model Cache Information")
+            print(f"{'='*50}")
+            print(f"Cache file: {cache_path}")
+            print(f"Size: {size_mb:.1f} MB")
+            print(f"Last modified: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"{'='*50}")
+        else:
+            print("\nNo model cache found.")
+            print(f"Cache would be stored at: {cache_path}")
+
+    elif clear:
+        # Clear the cache
+        if cache_path.exists():
+            cache_path.unlink()
+            logger.info("Model cache cleared")
+            print("\nModel cache cleared successfully.")
+        else:
+            print("\nNo cache to clear.")
+
+    else:
+        print("\nUse --info to show cache information or --clear to clear cache.")
 
 
 def run_profiling(config: SystemConfig, num_samples: int):

@@ -303,7 +303,7 @@ def read_root():
         "service": "Qwen3-Local MoE API",
         "version": "1.0.0",
         "model": "qwen3-80b-moe-bnb",
-        "status": "ready" if hasattr(app.state, 'model_service') and app.state.model_service and app.state.app.state.model_service.pipeline else "not loaded"
+        "status": "ready" if hasattr(app.state, 'model_service') and app.state.model_service and app.state.model_service.pipeline else "not loaded"
     }
 
 
@@ -313,7 +313,7 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "model_loaded": hasattr(app.state, 'model_service') and app.state.model_service is not None and app.state.app.state.model_service.pipeline is not None
+        "model_loaded": hasattr(app.state, 'model_service') and app.state.model_service is not None and app.state.model_service.pipeline is not None
     }
 
 
@@ -321,7 +321,7 @@ def health_check():
 async def generate_text(request: GenerateRequest):
     """Generate text endpoint"""
     try:
-        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.app.state.model_service.pipeline:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.model_service.pipeline:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         start_time = time.time()
@@ -375,7 +375,7 @@ async def generate_text(request: GenerateRequest):
 async def generate_batch(request: BatchGenerateRequest):
     """Batch generation endpoint"""
     try:
-        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.app.state.model_service.pipeline:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.model_service.pipeline:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         start_time = time.time()
@@ -413,7 +413,7 @@ async def generate_batch(request: BatchGenerateRequest):
 async def chat_completion(request: ChatCompletionRequest):
     """OpenAI-compatible chat completion endpoint"""
     try:
-        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.app.state.model_service.pipeline:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service or not app.state.model_service.pipeline:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         # Convert messages to dict format
@@ -440,7 +440,7 @@ async def chat_completion(request: ChatCompletionRequest):
 async def get_expert_stats():
     """Get expert cache statistics"""
     try:
-        if not model_service:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         return app.state.model_service.get_expert_stats()
@@ -454,7 +454,7 @@ async def get_expert_stats():
 async def configure_expert_optimization(request: ExpertOptimizationRequest):
     """Configure expert optimization"""
     try:
-        if not model_service:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         app.state.model_service.optimize_experts(
@@ -477,7 +477,7 @@ async def configure_expert_optimization(request: ExpertOptimizationRequest):
 async def get_model_info():
     """Get model information"""
     try:
-        if not model_service:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         return app.state.model_service.get_model_info()
@@ -491,7 +491,7 @@ async def get_model_info():
 async def get_memory_stats():
     """Get memory statistics"""
     try:
-        if not model_service:
+        if not hasattr(app.state, 'model_service') or not app.state.model_service:
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         return app.state.model_service.get_memory_stats()

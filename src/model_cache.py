@@ -129,7 +129,7 @@ class ModelCache:
 
             # Load tokenizer
             with open(tokenizer_file, 'rb') as f:
-                tokenizer = pickle.load(f)
+                _ = pickle.load(f)  # tokenizer - not used currently
 
             # For now, return None - full model reconstruction is complex
             # This would need the original model class and proper initialization

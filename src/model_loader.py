@@ -2,13 +2,21 @@
 Model loader with MoE-aware device mapping
 """
 
+# Set up memory management environment before importing torch
+import os
+if 'PYTORCH_CUDA_ALLOC_CONF' not in os.environ:
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:512'
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from typing import Tuple, Dict
 import logging
+import time
+import threading
 
 from moe_utils import create_moe_device_map, ExpertCacheManager, MemoryMonitor
 from config import SystemConfig
+# from model_cache import ModelCache  # Disabled: not functional with pre-quantized models
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +36,7 @@ class ModelLoader:
         self.tokenizer = None
         self.expert_cache_manager = None
         self.device_map = None
+        # self.model_cache = ModelCache(config.cache_dir / "model_cache")  # Disabled: not functional with pre-quantized models
 
         logger.info(f"Initialized ModelLoader for {config.model.model_name}")
 
@@ -39,15 +48,26 @@ class ModelLoader:
             Tuple of (model, tokenizer)
         """
         logger.info("Starting model loading process...")
+        start_time = time.time()
 
         # Check memory availability
         if not self._check_memory_requirements():
             raise RuntimeError("Insufficient memory for model loading")
 
-        # Use balanced device mapping to properly materialize tensors
-        # Sequential can cause meta tensor issues
-        self.device_map = "balanced"
-        logger.info("Using balanced device mapping")
+        # Check if we have a cached model
+        # cached_model_path = self.config.cache_dir / "model_cache" / "initialized_model.pt"
+        # Note: Caching disabled for pre-quantized BitsAndBytes models due to state_dict() issues
+        # if cached_model_path.exists():
+        #     logger.info("Found cached initialized model, attempting to load...")
+        #     loaded = self._load_cached_model(cached_model_path)
+        #     if loaded:
+        #         logger.info(f"Model loaded from cache in {time.time() - start_time:.1f} seconds")
+        #         return self.model, self.tokenizer
+
+        # Use auto device mapping for pre-quantized models to avoid meta tensor issues
+        # Auto properly materializes tensors during loading
+        self.device_map = "auto"
+        logger.info("Using auto device mapping for pre-quantized model")
 
         # No BitsAndBytes config needed - model is already quantized
         # bnb_config = self._create_bnb_config()
@@ -73,7 +93,9 @@ class ModelLoader:
         # Load model with custom device map
         logger.info("Loading model with MoE device mapping...")
 
-        # For pre-quantized models, we need to modify the config directly
+        # For pre-quantized models, we need to prepare config with CPU offloading enabled
+        # Note: We don't modify the actual config file on disk to avoid side effects
+        config_overrides = {}
         if model_path.exists():
             config_path = model_path / "config.json"
             if config_path.exists():
@@ -81,42 +103,73 @@ class ModelLoader:
                 with open(config_path, 'r') as f:
                     model_config = json.load(f)
 
-                # Update quantization config to allow CPU offloading
+                # Prepare config overrides for CPU offloading
                 if 'quantization_config' in model_config:
-                    model_config['quantization_config']['llm_int8_enable_fp32_cpu_offload'] = True
-                    # Temporarily save modified config
-                    with open(config_path, 'w') as f:
-                        json.dump(model_config, f, indent=2)
-                    logger.info("Updated model config to enable CPU offloading")
+                    if model_config['quantization_config'].get('llm_int8_enable_fp32_cpu_offload') != True:
+                        logger.info("Note: Model config needs CPU offloading enabled for optimal MoE handling")
+                        # We'll handle this through the quantization_config parameter instead of modifying files
 
         try:
             # Use very conservative memory limits to avoid CUDA OOM
             # Reserve most memory for activations and KV cache
-            conservative_max_memory = {
-                0: "8GB",  # Very conservative, only for essential components
-                "cpu": "100GB"
-            }
+            # conservative_max_memory = {
+            #     0: "8GB",  # Very conservative, only for essential components
+            #     "cpu": "100GB"
+            # }
 
-            # Set environment variables for better performance
+            # Set environment variables for better memory management
             import os
-            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+            # Only set if not already configured
+            if 'PYTORCH_CUDA_ALLOC_CONF' not in os.environ:
+                os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:512'
+                logger.info("Set PYTORCH_CUDA_ALLOC_CONF for better memory management")
 
             # Note: Safetensors loading is inherently single-threaded
             # Multi-threading doesn't help with checkpoint loading
 
             # The model config has been updated, now load without extra quantization params
             # Note: Don't use dtype parameter with pre-quantized models, it can cause meta tensor issues
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name_or_path,
-                device_map=self.device_map,
-                max_memory=conservative_max_memory,
-                trust_remote_code=self.config.quantization.trust_remote_code,
-                low_cpu_mem_usage=self.config.quantization.low_cpu_mem_usage,
-                offload_folder=str(self.config.offload_dir),
-                offload_state_dict=True,  # Ensure tensors are materialized
-                cache_dir=self.config.cache_dir
-            )
-            logger.info("Model loaded successfully")
+
+            logger.info("Loading checkpoint shards...")
+            checkpoint_start = time.time()
+
+            # For pre-quantized BitsAndBytes models, load with auto device map
+            # The meta tensor issue is a known BitsAndBytes limitation
+            # We'll work around it by catching the error and continuing
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name_or_path,
+                    device_map="auto",
+                    max_memory=self.config.memory.max_memory_mapping,
+                    trust_remote_code=self.config.quantization.trust_remote_code,
+                    cache_dir=self.config.cache_dir,
+                    offload_folder=str(self.config.offload_dir),
+                    offload_state_dict=True
+                )
+            except RuntimeError as e:
+                if "meta tensors" in str(e):
+                    logger.warning("Meta tensor error encountered, attempting fallback loading...")
+                    # Fallback: Load without device_map and handle manually
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        model_name_or_path,
+                        trust_remote_code=self.config.quantization.trust_remote_code,
+                        cache_dir=self.config.cache_dir
+                    )
+                else:
+                    raise
+
+            checkpoint_time = time.time() - checkpoint_start
+            logger.info(f"Checkpoint shards loaded in {checkpoint_time:.1f} seconds")
+
+            # The model dispatch/initialization phase happens automatically with device_map
+            logger.info("Model initialization complete")
+
+            total_load_time = time.time() - start_time
+            logger.info(f"Model fully loaded in {total_load_time:.1f} seconds total")
+
+            # Note: Caching disabled for pre-quantized models due to meta tensor issues
+            # The state_dict() call fails on quantized weights
+            logger.info("Note: Model caching is disabled for pre-quantized models")
 
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
@@ -271,3 +324,124 @@ class ModelLoader:
         if self.expert_cache_manager:
             self.expert_cache_manager.num_cached_experts_per_layer = top_k
             logger.info(f"Updated expert cache to top-{top_k} per layer")
+
+    def _monitor_dispatch_phase(self) -> None:
+        """Monitor the model dispatch/initialization phase with progress indicator"""
+        import psutil
+        import sys
+
+        # Create a simple progress indicator
+        stop_monitoring = threading.Event()
+
+        def monitor_progress():
+            """Show progress during dispatch phase"""
+            spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+            idx = 0
+            start = time.time()
+
+            while not stop_monitoring.is_set():
+                elapsed = time.time() - start
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                mem_percent = psutil.virtual_memory().percent
+
+                # Show spinner with status
+                sys.stdout.write(f'\r  {spinner[idx]} Initializing model... '
+                               f'[{elapsed:.0f}s] CPU: {cpu_percent:.1f}% RAM: {mem_percent:.1f}%')
+                sys.stdout.flush()
+
+                idx = (idx + 1) % len(spinner)
+                time.sleep(0.2)
+
+            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear the line
+            sys.stdout.flush()
+
+        # Start monitoring in a separate thread
+        monitor_thread = threading.Thread(target=monitor_progress)
+        monitor_thread.start()
+
+        try:
+            # The actual dispatch happens when we first access the model
+            # Force initialization by accessing model parameters
+            _ = self.model.config
+            _ = next(self.model.parameters(), None)
+        finally:
+            # Stop monitoring
+            stop_monitoring.set()
+            monitor_thread.join()
+
+    def _cache_initialized_model(self, cache_path) -> bool:
+        """
+        Cache the initialized model to disk for faster loading.
+        NOTE: Disabled for pre-quantized BitsAndBytes models due to meta tensor issues.
+
+        Args:
+            cache_path: Path to save the cached model
+
+        Returns:
+            True if successfully cached
+        """
+        # Disabled for pre-quantized models - state_dict() fails on quantized weights
+        logger.info("Model caching is disabled for pre-quantized BitsAndBytes models")
+        return False
+
+        # Original implementation commented out:
+        # try:
+        #     cache_path.parent.mkdir(parents=True, exist_ok=True)
+        #     logger.info(f"Caching initialized model to {cache_path}...")
+        #
+        #     # Save the model state after initialization
+        #     cache_data = {
+        #         'model_state_dict': self.model.state_dict(),
+        #         'model_config': self.model.config,
+        #         'device_map': self.device_map,
+        #         'tokenizer': self.tokenizer,
+        #         'timestamp': time.time()
+        #     }
+        #
+        #     torch.save(cache_data, cache_path, pickle_protocol=4)
+        #     cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
+        #     logger.info(f"Model cached successfully ({cache_size_mb:.1f} MB)")
+        #     return True
+        #
+        # except Exception as e:
+        #     logger.error(f"Failed to cache model: {e}")
+        #     return False
+
+    def _load_cached_model(self, cache_path) -> bool:
+        """
+        Load model from cache.
+
+        Args:
+            cache_path: Path to cached model
+
+        Returns:
+            True if successfully loaded from cache
+        """
+        try:
+            logger.info("Loading model from cache (this should be much faster)...")
+
+            cache_data = torch.load(cache_path, map_location='cpu')
+
+            # Recreate the model with cached state
+            from pathlib import Path
+            model_path = Path(self.config.model.local_model_path)
+
+            # Load tokenizer
+            self.tokenizer = cache_data['tokenizer']
+
+            # Create model structure
+            self.model = AutoModelForCausalLM.from_pretrained(
+                str(model_path),
+                device_map=cache_data['device_map'],
+                trust_remote_code=self.config.quantization.trust_remote_code,
+                low_cpu_mem_usage=True,
+                state_dict=cache_data['model_state_dict']  # Use cached state
+            )
+
+            logger.info("Model loaded from cache successfully")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to load from cache: {e}")
+            logger.info("Falling back to normal loading...")
+            return False

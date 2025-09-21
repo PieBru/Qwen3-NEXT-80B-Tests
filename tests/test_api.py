@@ -270,11 +270,20 @@ class TestModelService(unittest.TestCase):
         result = service.generate("Test prompt", max_tokens=50)
         self.assertEqual(result, "Generated text")
 
-    def test_chat_completion_format(self):
+    @patch('api_server.MoEInferencePipeline')
+    def test_chat_completion_format(self, mock_pipeline_class):
         """Test chat completion response format"""
-        self.service.pipeline.generate.return_value = "Assistant response"
+        mock_pipeline = MagicMock()
+        mock_pipeline.generate.return_value = "Assistant response"
+        mock_pipeline_class.return_value = mock_pipeline
 
-        result = self.service.chat_completion(
+        service = ModelService(
+            model=self.mock_model,
+            tokenizer=self.mock_tokenizer,
+            expert_manager=self.mock_expert_manager
+        )
+
+        result = service.chat_completion(
             messages=[
                 {"role": "user", "content": "Hello"}
             ],
