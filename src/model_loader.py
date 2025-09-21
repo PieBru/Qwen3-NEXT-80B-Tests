@@ -66,8 +66,7 @@ class ModelLoader:
                 self.expert_cache_manager = ExpertCacheManager(
                     model=self.model,
                     vram_budget_gb=self.config.memory.experts_vram_gb,
-                    num_cached_experts_per_layer=self.config.memory.cached_experts_per_layer,
-                    enable_dynamic_caching=self.config.inference.enable_dynamic_expert_caching
+                    num_cached_experts_per_layer=self.config.memory.cached_experts_per_layer
                 )
 
                 return self.model, self.tokenizer

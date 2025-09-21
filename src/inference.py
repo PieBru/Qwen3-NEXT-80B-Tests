@@ -249,7 +249,8 @@ class StreamingGenerator:
         # Encode prompt
         input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
         if torch.cuda.is_available():
-            input_ids = input_ids.cuda()
+            # Keep on CPU to match model device
+            # input_ids = input_ids.cuda()
 
         # Generate token by token
         generated = []
@@ -458,8 +459,10 @@ class MoEInferencePipeline:
             max_length=self.model.config.max_position_embeddings
         )
 
-        if torch.cuda.is_available():
-            inputs = {k: v.cuda() for k, v in inputs.items()}
+        # Keep inputs on CPU since model is mostly on CPU
+        # Moving to CUDA causes device mismatch errors
+        # if torch.cuda.is_available():
+        #     inputs = {k: v.cuda() for k, v in inputs.items()}
 
         # Generate
         with torch.no_grad():
@@ -539,8 +542,10 @@ class MoEInferencePipeline:
             max_length=self.model.config.max_position_embeddings
         )
 
-        if torch.cuda.is_available():
-            inputs = {k: v.cuda() for k, v in inputs.items()}
+        # Keep inputs on CPU since model is mostly on CPU
+        # Moving to CUDA causes device mismatch errors
+        # if torch.cuda.is_available():
+        #     inputs = {k: v.cuda() for k, v in inputs.items()}
 
         # Generate
         with torch.no_grad():
