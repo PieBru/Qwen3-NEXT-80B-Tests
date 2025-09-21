@@ -134,58 +134,54 @@ class ModelLoader:
             logger.info("Loading checkpoint shards...")
             checkpoint_start = time.time()
 
-            # For pre-quantized BitsAndBytes models, load with auto device map
-            # The meta tensor issue is a known BitsAndBytes limitation
-            # We'll work around it by catching the error and continuing
-            try:
-                # Clear CUDA cache before loading to prevent OOM
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
+            # For pre-quantized BitsAndBytes models, we need special handling
+            # The meta tensor issue requires loading without device_map first
 
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name_or_path,
-                    device_map="auto",
-                    max_memory=self.config.memory.max_memory_mapping,
-                    trust_remote_code=self.config.quantization.trust_remote_code,
-                    cache_dir=self.config.cache_dir,
-                    offload_folder=str(self.config.offload_dir),
-                    offload_state_dict=False,  # Changed to False to avoid potential issues
-                    low_cpu_mem_usage=True  # Use low CPU memory mode
-                )
-            except RuntimeError as e:
-                if "meta tensors" in str(e):
-                    logger.warning("Meta tensor error encountered, attempting fallback loading...")
+            # Clear CUDA cache before loading to prevent OOM
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
-                    # Clean up failed model attempt and free memory
-                    if hasattr(self, 'model'):
-                        del self.model
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                        torch.cuda.synchronize()
-                        import gc
-                        gc.collect()
+            logger.info("Loading quantized model with CPU-first strategy to avoid meta tensor issues...")
 
-                    # Wait a bit for memory to be fully released
-                    import time
-                    time.sleep(2)
+            # Load model without device_map to avoid meta tensor errors
+            # This loads everything to CPU first
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path,
+                trust_remote_code=self.config.quantization.trust_remote_code,
+                cache_dir=self.config.cache_dir,
+                torch_dtype=torch.float16,  # Use fp16 for efficiency
+                low_cpu_mem_usage=False  # Load fully to CPU first
+            )
 
-                    # Fallback: Load with reduced GPU memory to prevent OOM
-                    # Use only 8GB for safety, let the rest go to CPU
-                    reduced_max_memory = {0: "8GB", "cpu": "100GB"}
-                    logger.info("Loading with reduced GPU memory allocation (8GB) to prevent OOM...")
+            logger.info("Model loaded to CPU, now optimizing device placement...")
 
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_name_or_path,
-                        device_map="auto",
-                        max_memory=reduced_max_memory,
-                        trust_remote_code=self.config.quantization.trust_remote_code,
-                        cache_dir=self.config.cache_dir,
-                        offload_folder=str(self.config.offload_dir),
-                        low_cpu_mem_usage=True
-                    )
-                else:
-                    raise
+            # Manually move critical components to GPU if available
+            if torch.cuda.is_available():
+                try:
+                    # Move embeddings to GPU (usually small)
+                    if hasattr(self.model, 'model'):
+                        if hasattr(self.model.model, 'embed_tokens'):
+                            self.model.model.embed_tokens = self.model.model.embed_tokens.cuda()
+                            logger.info("Moved embeddings to GPU")
+
+                        # Move output norm layer to GPU
+                        if hasattr(self.model.model, 'norm'):
+                            self.model.model.norm = self.model.model.norm.cuda()
+                            logger.info("Moved output norm to GPU")
+
+                    # Move language model head to GPU
+                    if hasattr(self.model, 'lm_head'):
+                        self.model.lm_head = self.model.lm_head.cuda()
+                        logger.info("Moved lm_head to GPU")
+
+                    # Keep all layers on CPU for now to avoid OOM
+                    # They will be moved dynamically during inference
+                    logger.info("Model optimized: critical components on GPU, layers on CPU")
+
+                except torch.cuda.OutOfMemoryError:
+                    logger.warning("Could not move all components to GPU, keeping on CPU")
+                    # Model will work but slower
 
             checkpoint_time = time.time() - checkpoint_start
             logger.info(f"Checkpoint shards loaded in {checkpoint_time:.1f} seconds")
