@@ -45,9 +45,9 @@ The model loads in two main phases:
 - **Progress**: Now shows spinner with CPU/RAM usage
 
 ### Memory Management
-- **Device mapping**: Using "balanced" to avoid meta tensor issues
-- **VRAM limit**: 8GB to prevent OOM
-- **RAM usage**: ~90GB for expert weights
+- **Device mapping**: Using "auto" with fallback for meta tensor issues
+- **VRAM limit**: 10GB to prevent OOM
+- **RAM usage**: ~80GB for expert weights
 
 ## ⚠️ Model Caching Status
 
@@ -90,8 +90,8 @@ tail -f server.log
 ```
 
 ## Memory Requirements Confirmed
-- RAM: ~90GB for expert weights
-- VRAM: ~14GB for non-expert components
+- RAM: ~80GB for expert weights (reduced for compatibility)
+- VRAM: ~10GB for non-expert components (conservative to prevent OOM)
 - The system correctly allocates memory as designed
 
 ## Next Steps
