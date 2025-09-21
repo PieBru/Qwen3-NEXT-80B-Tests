@@ -71,10 +71,27 @@ class ModelLoader:
 
         # Load model with custom device map
         logger.info("Loading model with MoE device mapping...")
+
+        # For pre-quantized models, we need to modify the config directly
+        if model_path.exists():
+            config_path = model_path / "config.json"
+            if config_path.exists():
+                import json
+                with open(config_path, 'r') as f:
+                    model_config = json.load(f)
+
+                # Update quantization config to allow CPU offloading
+                if 'quantization_config' in model_config:
+                    model_config['quantization_config']['llm_int8_enable_fp32_cpu_offload'] = True
+                    # Temporarily save modified config
+                    with open(config_path, 'w') as f:
+                        json.dump(model_config, f, indent=2)
+                    logger.info("Updated model config to enable CPU offloading")
+
         try:
+            # The model config has been updated, now load without extra quantization params
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name_or_path,
-                quantization_config=bnb_config,
                 device_map=self.device_map,
                 max_memory=self.config.memory.max_memory_mapping,
                 torch_dtype=self.config.quantization.bnb_4bit_compute_dtype,
