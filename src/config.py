@@ -13,9 +13,9 @@ class ModelConfig:
     """Model configuration parameters"""
     model_name: str = "unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit"
     local_model_path: str = "models/qwen3-80b-bnb"  # Local model directory
-    num_layers: int = 80
-    num_experts: int = 64
-    num_activated_experts: int = 6  # A3B means ~3B active params
+    num_layers: int = 48  # Actual number of layers from model config
+    num_experts: int = 512  # Actual number of experts from model config
+    num_activated_experts: int = 10  # num_experts_per_tok from config
     context_length: int = 262144
     vocab_size: int = 151936
 

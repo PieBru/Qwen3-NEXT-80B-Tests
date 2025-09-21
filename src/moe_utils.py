@@ -28,6 +28,12 @@ def create_moe_device_map(
     Returns:
         Device map dictionary
     """
+    # For Qwen3-Next-80B, we actually have 48 layers according to config
+    # The model name suggests 80B params, not 80 layers
+    if model_type == "qwen3":
+        num_layers = 48  # From the actual model config
+        num_experts = 512  # Qwen3-Next-80B has 512 experts per layer
+
     device_map = {}
 
     # Core components always on GPU
@@ -40,17 +46,34 @@ def create_moe_device_map(
     for component in gpu_components:
         device_map[component] = 0
 
+    # Layer types from config (pattern repeats)
+    layer_pattern = ["linear_attention", "linear_attention", "linear_attention", "full_attention"]
+
     # For each transformer layer
     for i in range(num_layers):
-        # Non-expert components go to GPU
-        device_map[f"model.layers.{i}.self_attn"] = 0
+        # Determine layer type
+        layer_type = layer_pattern[i % len(layer_pattern)]
+
+        # Core normalization layers always on GPU
         device_map[f"model.layers.{i}.input_layernorm"] = 0
         device_map[f"model.layers.{i}.post_attention_layernorm"] = 0
 
+        if layer_type == "linear_attention":
+            # For linear attention layers, map the entire linear_attn module
+            # This should include all subcomponents like A_log, etc.
+            device_map[f"model.layers.{i}.linear_attn"] = 0
+
+        # Self-attention components (might exist even in linear attention layers)
+        device_map[f"model.layers.{i}.self_attn"] = 0
+
+        # MoE components
         # Router/gate must be on GPU for efficient routing
         device_map[f"model.layers.{i}.block_sparse_moe.gate"] = 0
 
-        # Initially place all experts on CPU
+        # Shared experts (if they exist) should be on GPU
+        device_map[f"model.layers.{i}.block_sparse_moe.shared_expert"] = 0
+
+        # Initially place all individual experts on CPU
         for j in range(num_experts):
             device_map[f"model.layers.{i}.block_sparse_moe.experts.{j}"] = "cpu"
 

@@ -44,12 +44,13 @@ class ModelLoader:
         if not self._check_memory_requirements():
             raise RuntimeError("Insufficient memory for model loading")
 
-        # Create custom device map
-        self.device_map = self._create_device_map()
-        logger.info(f"Created device map with {len(self.device_map)} components")
+        # Use auto device mapping for now - it's more reliable
+        # We can optimize with custom mapping later
+        self.device_map = "auto"
+        logger.info("Using auto device mapping for initial setup")
 
-        # Create BitsAndBytes configuration
-        bnb_config = self._create_bnb_config()
+        # No BitsAndBytes config needed - model is already quantized
+        # bnb_config = self._create_bnb_config()
 
         # Determine model path (local or remote)
         from pathlib import Path
