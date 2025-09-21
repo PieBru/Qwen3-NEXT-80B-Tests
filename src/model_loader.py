@@ -61,6 +61,15 @@ class ModelLoader:
             loaded = self._load_cached_model(cached_model_path)
             if loaded:
                 logger.info(f"Model loaded from cache in {time.time() - start_time:.1f} seconds")
+
+                # Initialize expert cache manager for cached model
+                self.expert_cache_manager = ExpertCacheManager(
+                    model=self.model,
+                    vram_budget_gb=self.config.memory.experts_vram_gb,
+                    num_cached_experts_per_layer=self.config.memory.cached_experts_per_layer,
+                    enable_dynamic_caching=self.config.inference.enable_dynamic_expert_caching
+                )
+
                 return self.model, self.tokenizer
             else:
                 logger.info("Cache load failed, proceeding with normal loading...")
@@ -461,7 +470,8 @@ class ModelLoader:
             logger.info("Loading model from cache (this should be much faster)...")
 
             # Load the entire cached model object
-            cache_data = torch.load(cache_path, map_location='cpu')
+            # Use weights_only=False for BitsAndBytes models with custom objects
+            cache_data = torch.load(cache_path, map_location='cpu', weights_only=False)
 
             # Check cache validity (optional - can add version checks here)
             if 'timestamp' in cache_data:

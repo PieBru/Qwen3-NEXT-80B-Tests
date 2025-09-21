@@ -281,11 +281,13 @@ async def startup_event():
         model, tokenizer = loader.load_model()
 
         # Initialize service
+        logger.info(f"Initializing ModelService with model={model is not None}, tokenizer={tokenizer is not None}, expert_manager={hasattr(loader, 'expert_cache_manager')}")
         app.state.model_service = ModelService(
             model=model,
             tokenizer=tokenizer,
-            expert_manager=loader.expert_cache_manager
+            expert_manager=loader.expert_cache_manager if hasattr(loader, 'expert_cache_manager') else None
         )
+        logger.info(f"ModelService initialized. Pipeline created: {app.state.model_service.pipeline is not None}")
         logger.info("Model loaded successfully")
 
     except Exception as e:
