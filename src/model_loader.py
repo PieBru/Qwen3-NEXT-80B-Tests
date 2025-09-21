@@ -94,7 +94,7 @@ class ModelLoader:
                 model_name_or_path,
                 device_map=self.device_map,
                 max_memory=self.config.memory.max_memory_mapping,
-                torch_dtype=self.config.quantization.bnb_4bit_compute_dtype,
+                dtype=self.config.quantization.bnb_4bit_compute_dtype,
                 trust_remote_code=self.config.quantization.trust_remote_code,
                 low_cpu_mem_usage=self.config.quantization.low_cpu_mem_usage,
                 offload_folder=str(self.config.offload_dir),
