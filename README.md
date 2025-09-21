@@ -1,8 +1,16 @@
 # Qwen3-Local MoE BitsAndBytes Implementation
 
-A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct with MoE-aware memory management, achieving 8-12 tokens/second on RTX-4090 (16GB VRAM) + 100GB DDR5 RAM.
+**✅ WORKING - Model successfully loads and performs inference!**
 
-> **Note**: This is an experimental implementation while waiting for llama.cpp support. We're using BitsAndBytes 4-bit quantization with MoE-aware memory management for efficient inference.
+A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct with MoE-aware memory management. Successfully tested with correct inference results.
+
+## 🎉 Current Status
+- **Model Loading**: ✅ Fixed - Loads from cache in ~22 seconds
+- **Inference**: ✅ Working - Successfully answers questions
+- **Caching**: ✅ Enabled - 40GB cache file for fast restarts
+- **API Server**: ✅ Operational - REST API fully functional
+
+> **Note**: This implementation uses BitsAndBytes 4-bit quantization with CPU-based execution to avoid meta tensor issues.
 
 ## 🚀 Features
 
@@ -13,12 +21,16 @@ A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct wit
 - **OpenAI-Compatible API**: Drop-in replacement for OpenAI API endpoints
 - **Performance Monitoring**: Real-time expert usage statistics and memory tracking
 
-## 📊 Performance Targets
+## 📊 Performance Metrics
 
-- **Inference Speed**: 8-12 tokens/second
-- **Memory Usage**: 14GB VRAM + 90GB system RAM
-- **Context Length**: Up to 262,144 tokens
-- **Model Size**: 80B parameters (3B activated per forward pass)
+| Metric | Target | Actual |
+|--------|--------|--------|
+| **First Load Time** | < 15 min | ~8-10 minutes |
+| **Cached Load Time** | < 2 min | **22 seconds** ✅ |
+| **Inference Speed** | 8-12 tok/s | ~0.12 tok/s (CPU-based) |
+| **Memory Usage** | 14GB VRAM | 8GB VRAM + CPU RAM |
+| **Cache File Size** | N/A | 40GB |
+| **Model Size** | 80B params | 80B (3B activated)
 
 ## 🛠️ Installation
 
@@ -119,16 +131,55 @@ python main.py benchmark --output results/benchmark
 python main.py profile --samples 100
 ```
 
-## 🔧 API Endpoints
+## 🔧 API Endpoints & Testing
 
-### Text Generation
+### Quick Test - Check if Model is Ready
 ```bash
+# Check server status
+curl http://localhost:8000/
+# Expected: {"service":"Qwen3-Local MoE API","version":"1.0.0","model":"qwen3-80b-moe-bnb","status":"ready"}
+```
+
+### Simple Math Test (Recommended First Test)
+```bash
+# Test with 2+2 (quick response)
 curl -X POST "http://localhost:8000/api/v1/generate" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Hello, how are you?",
-    "max_tokens": 100,
+    "prompt": "2+2=",
+    "max_tokens": 5,
+    "temperature": 0.1
+  }'
+# Expected: {"text":"4","tokens_generated":1,"generation_time":~16,"expert_cache_hits":0}
+```
+
+### Text Generation Examples
+```bash
+# Simple greeting
+curl -X POST "http://localhost:8000/api/v1/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Hello, my name is",
+    "max_tokens": 10,
     "temperature": 0.7
+  }'
+
+# Question answering
+curl -X POST "http://localhost:8000/api/v1/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Question: What is the capital of France?\nAnswer:",
+    "max_tokens": 20,
+    "temperature": 0.3
+  }'
+
+# Code generation
+curl -X POST "http://localhost:8000/api/v1/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "def fibonacci(n):",
+    "max_tokens": 100,
+    "temperature": 0.5
   }'
 ```
 
@@ -138,19 +189,45 @@ curl -X POST "http://localhost:8000/api/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen3-80b",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 100
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "What is 2+2?"}
+    ],
+    "max_tokens": 50,
+    "temperature": 0.1
   }'
 ```
 
-### Expert Statistics
+### Monitoring Endpoints
 ```bash
+# Expert cache statistics
 curl "http://localhost:8000/api/v1/expert-stats"
+
+# Memory usage statistics
+curl "http://localhost:8000/api/v1/memory"
+
+# Model information
+curl "http://localhost:8000/api/v1/model-info"
 ```
 
-### Memory Statistics
+### Response Format with jq (Pretty Print)
 ```bash
-curl "http://localhost:8000/api/v1/memory"
+# Install jq if not available: sudo pacman -S jq (Arch) or apt install jq (Debian/Ubuntu)
+
+# Pretty print JSON response
+curl -X POST "http://localhost:8000/api/v1/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello", "max_tokens": 5}' \
+  -s | jq .
+```
+
+### Timing Your Requests
+```bash
+# Measure response time
+time curl -X POST "http://localhost:8000/api/v1/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is 2+2?", "max_tokens": 5, "temperature": 0.1}' \
+  -s -o response.json && cat response.json | jq .
 ```
 
 ## 🏗️ Architecture
