@@ -12,6 +12,7 @@ from pathlib import Path
 class ModelConfig:
     """Model configuration parameters"""
     model_name: str = "unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit"
+    local_model_path: str = "models/qwen3-80b-bnb"  # Local model directory
     num_layers: int = 80
     num_experts: int = 64
     num_activated_experts: int = 6  # A3B means ~3B active params
@@ -102,9 +103,10 @@ class SystemConfig:
     server: ServerConfig = None
 
     # Paths
-    cache_dir: Path = Path.home() / ".cache" / "qwen3-local"
+    cache_dir: Path = Path.home() / ".cache" / "huggingface"
     offload_dir: Path = Path.home() / ".cache" / "qwen3-local" / "offload"
     logs_dir: Path = Path.home() / ".cache" / "qwen3-local" / "logs"
+    model_dir: Path = Path("models/qwen3-80b-bnb")  # Local model directory
 
     def __post_init__(self):
         # Initialize sub-configs if not provided

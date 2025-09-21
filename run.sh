@@ -100,18 +100,7 @@ else:
 
     "download-model")
         echo -e "${GREEN}Downloading model weights...${NC}"
-        echo "This will download the Qwen3-Next-80B-A3B-Instruct-bnb-4bit model."
-        echo "The model is approximately 40GB. Continue? (y/n)"
-        read -r response
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            python -c "
-from transformers import AutoModelForCausalLM, AutoTokenizer
-print('Downloading model... This may take a while.')
-model_name = 'unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit'
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-print('Model download initiated. Check ~/.cache/huggingface/ for progress.')
-"
-        fi
+        python src/download_model.py "$@"
         ;;
 
     *)

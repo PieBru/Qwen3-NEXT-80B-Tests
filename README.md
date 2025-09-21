@@ -28,12 +28,13 @@ A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct wit
 - CUDA 11.8+ compatible GPU (RTX 4090 or similar)
 - 100+ GB system RAM
 - Linux (tested on Arch Linux)
+- ~40GB disk space for model weights
 
 ### Quick Start
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/PieBru/Qwen3-NEXT-80B-Tests.git
 cd Qwen3-80B_test
 ```
 
@@ -43,34 +44,63 @@ chmod +x install.sh
 ./install.sh
 ```
 
-3. Activate the virtual environment:
+3. Download the model (choose one method):
+
+**Option A: Using the download script**
+```bash
+./run.sh download-model
+# or
+python src/download_model.py --download
+```
+
+**Option B: Using huggingface-cli directly**
+```bash
+huggingface-cli download unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit \
+  --local-dir models/qwen3-80b-bnb
+```
+
+4. Verify the model installation:
+```bash
+python src/download_model.py  # Check if model is properly installed
+./run.sh quick-test           # Run configuration test
+```
+
+5. Activate the virtual environment:
 ```bash
 source venv/bin/activate
 ```
 
 ## 🎯 Usage
 
-### Start the API Server
+> **Note**: The model must be downloaded before running any commands. See installation step 3 above.
+
+### Using the run.sh Helper Script
 
 ```bash
+# Quick system check
+./run.sh memory-check    # Check if hardware meets requirements
+./run.sh quick-test      # Verify configuration
+
+# Main operations
+./run.sh serve           # Start API server on port 8000
+./run.sh generate "Your prompt here" --max-tokens 100
+./run.sh benchmark --output results/bench
+./run.sh profile --samples 100
+```
+
+### Direct Python Commands
+
+```bash
+# Start the API Server
 python main.py serve --host 0.0.0.0 --port 8000
-```
 
-### Generate Text (CLI)
-
-```bash
+# Generate Text (CLI)
 python main.py generate "Explain quantum computing" --max-tokens 100 --temperature 0.7
-```
 
-### Run Performance Benchmark
-
-```bash
+# Run Performance Benchmark
 python main.py benchmark --output results/benchmark
-```
 
-### Profile Expert Usage
-
-```bash
+# Profile Expert Usage
 python main.py profile --samples 100
 ```
 
