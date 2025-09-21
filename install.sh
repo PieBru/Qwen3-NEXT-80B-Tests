@@ -18,16 +18,21 @@ if ! command -v uv &> /dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
     # Add uv to PATH for this session
     export PATH="$HOME/.cargo/bin:$PATH"
+
+    # Verify uv installation
+    if ! command -v uv &> /dev/null; then
+        echo "Failed to install uv. Please install manually from https://github.com/astral-sh/uv"
+        exit 1
+    fi
 fi
 
-# Create virtual environment
-echo "Creating virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
+# Create virtual environment using uv
+echo "Creating virtual environment with uv..."
+uv venv
 
-# Upgrade pip using uv
-echo "Upgrading pip..."
-uv pip install --upgrade pip
+# Activate the virtual environment
+echo "Activating virtual environment..."
+source .venv/bin/activate
 
 # Install PyTorch with CUDA support
 echo "Installing PyTorch with CUDA support..."
@@ -50,31 +55,38 @@ uv pip install numpy>=1.24.0
 uv pip install fastapi>=0.100.0
 uv pip install uvicorn>=0.23.0
 uv pip install pydantic>=2.0.0
+uv pip install websockets>=10.0
+uv pip install huggingface-hub>=0.17.0
 
 # Install development dependencies
 echo "Installing development dependencies..."
-uv pip install pytest pytest-cov black isort
+uv pip install pytest pytest-cov pytest-asyncio black isort
 
-# Install package in development mode
-echo "Installing package in development mode..."
-uv pip install -e .
+# Check if setup.py or pyproject.toml exists for package installation
+if [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
+    echo "Installing package in development mode..."
+    uv pip install -e .
+fi
 
 # Verify installation
 echo ""
 echo "Verifying installation..."
 python3 -c "
+import sys
 import torch
 import transformers
 import bitsandbytes
 import accelerate
+
+print('✓ Python:', sys.version.split()[0])
 print('✓ PyTorch version:', torch.__version__)
 print('✓ CUDA available:', torch.cuda.is_available())
 if torch.cuda.is_available():
     print('✓ GPU:', torch.cuda.get_device_name(0))
     print('✓ VRAM:', round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1), 'GB')
-print('✓ Transformers installed')
+print('✓ Transformers version:', transformers.__version__)
 print('✓ BitsAndBytes version:', bitsandbytes.__version__)
-print('✓ Accelerate installed')
+print('✓ Accelerate version:', accelerate.__version__)
 print('')
 print('Installation complete!')
 "
@@ -82,5 +94,12 @@ print('Installation complete!')
 echo ""
 echo "================================================"
 echo "Installation completed successfully!"
-echo "Activate the environment with: source venv/bin/activate"
+echo ""
+echo "To activate the environment, run:"
+echo "  source .venv/bin/activate"
+echo ""
+echo "Next steps:"
+echo "1. Download the model: ./run.sh download-model"
+echo "2. Run quick test: ./run.sh quick-test"
+echo "3. Start the server: ./run.sh serve"
 echo "================================================"

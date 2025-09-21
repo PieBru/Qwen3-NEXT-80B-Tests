@@ -67,7 +67,7 @@ python src/download_model.py  # Check if model is properly installed
 
 5. Activate the virtual environment:
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
 ## 🎯 Usage

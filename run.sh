@@ -12,13 +12,13 @@ echo "Qwen3-Local MoE BitsAndBytes Runner"
 echo "================================================"
 
 # Check if virtual environment exists
-if [ ! -d "venv" ]; then
+if [ ! -d ".venv" ]; then
     echo -e "${YELLOW}Virtual environment not found. Running install script...${NC}"
     ./install.sh
 fi
 
 # Activate virtual environment
-source venv/bin/activate
+source .venv/bin/activate
 
 # Parse command
 COMMAND=$1
