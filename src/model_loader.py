@@ -6,9 +6,11 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from typing import Tuple, Dict
 import logging
+import time
 
 from moe_utils import create_moe_device_map, ExpertCacheManager, MemoryMonitor
 from config import SystemConfig
+from model_cache import ModelCache, CheckpointCache
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ class ModelLoader:
         self.tokenizer = None
         self.expert_cache_manager = None
         self.device_map = None
+        self.model_cache = ModelCache(config.cache_dir / "model_cache")
 
         logger.info(f"Initialized ModelLoader for {config.model.model_name}")
 
@@ -39,14 +42,16 @@ class ModelLoader:
             Tuple of (model, tokenizer)
         """
         logger.info("Starting model loading process...")
+        start_time = time.time()
 
         # Check memory availability
         if not self._check_memory_requirements():
             raise RuntimeError("Insufficient memory for model loading")
 
-        # Use sequential device mapping to control memory usage
-        self.device_map = "sequential"
-        logger.info("Using sequential device mapping to avoid OOM")
+        # Use balanced device mapping to properly materialize tensors
+        # Sequential can cause meta tensor issues
+        self.device_map = "balanced"
+        logger.info("Using balanced device mapping")
 
         # No BitsAndBytes config needed - model is already quantized
         # bnb_config = self._create_bnb_config()
@@ -104,17 +109,24 @@ class ModelLoader:
             # Multi-threading doesn't help with checkpoint loading
 
             # The model config has been updated, now load without extra quantization params
+            # Note: Don't use dtype parameter with pre-quantized models, it can cause meta tensor issues
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name_or_path,
                 device_map=self.device_map,
                 max_memory=conservative_max_memory,
-                dtype=self.config.quantization.bnb_4bit_compute_dtype,
                 trust_remote_code=self.config.quantization.trust_remote_code,
                 low_cpu_mem_usage=self.config.quantization.low_cpu_mem_usage,
                 offload_folder=str(self.config.offload_dir),
+                offload_state_dict=True,  # Ensure tensors are materialized
                 cache_dir=self.config.cache_dir
             )
-            logger.info("Model loaded successfully")
+            load_time = time.time() - start_time
+            logger.info(f"Model loaded successfully in {load_time:.1f} seconds")
+
+            # Log memory usage
+            if torch.cuda.is_available():
+                used_vram = torch.cuda.memory_allocated(0) / 1024**3
+                logger.info(f"VRAM usage after loading: {used_vram:.2f} GB")
 
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
@@ -131,6 +143,7 @@ class ModelLoader:
         # Set model to evaluation mode
         self.model.eval()
 
+        logger.info("Model initialization complete and ready for inference")
         return self.model, self.tokenizer
 
     def _create_device_map(self) -> Dict[str, any]:
