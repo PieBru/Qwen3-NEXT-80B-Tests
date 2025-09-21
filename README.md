@@ -38,10 +38,25 @@ git clone https://github.com/PieBru/Qwen3-NEXT-80B-Tests.git
 cd Qwen3-80B_test
 ```
 
-2. Run the installation script:
+2. Install dependencies (choose one method):
+
+**Option A: Using the installation script (recommended)**
 ```bash
 chmod +x install.sh
 ./install.sh
+```
+
+**Option B: Using pip/uv manually**
+```bash
+# Create virtual environment
+uv venv
+source .venv/bin/activate
+
+# Install with setup.py
+uv pip install -e .
+
+# Install PyTorch with CUDA
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
 3. Download the model (choose one method):
