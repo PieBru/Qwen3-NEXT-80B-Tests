@@ -6,13 +6,16 @@ This guide will help you practice with the Qwen3-80B MoE BitsAndBytes implementa
 
 Before starting any tests, ensure:
 
-- [ ] **Model downloaded**: Check with `python src/download_model.py`
+- [ ] **Model downloaded**: Check with `python src/download_model.py` (~40GB)
 - [ ] **Virtual environment activated**: `source .venv/bin/activate`
 - [ ] **GPU available**: Run `nvidia-smi` to verify CUDA GPU
 - [ ] **Sufficient memory**: Need ~14GB VRAM + ~90GB RAM available
 - [ ] **Dependencies installed**: Try `python -c "import torch; print(torch.cuda.is_available())"`
+- [ ] **Time allocated**: First model load takes 10-15 minutes
 
 If any check fails, see the Installation section below.
+
+⏳ **IMPORTANT**: Model loading is SLOW (10-15 min) but this is NORMAL for a 40GB model!
 
 ## 📋 Prerequisites
 
@@ -146,6 +149,7 @@ pytest tests/ --cov=src --cov-report=html
 ### 3. Inference Testing
 
 ⚠️ **Note**: Model must be downloaded before running these commands!
+⏳ **Loading Time**: First inference takes 10-15 minutes to load the 40GB model
 
 #### Simple Text Generation
 ```bash
@@ -167,16 +171,27 @@ pytest tests/ --cov=src --cov-report=html
 
 ### 4. API Server Testing
 
+#### ⏳ Important: Model Loading Time
+**The model takes 10-15 minutes to load initially!** This is normal for a 40GB model. Monitor progress with:
+```bash
+# In terminal 1: Start the server
+./run.sh serve
+
+# In terminal 2: Monitor loading progress
+tail -f server.log
+# Look for "Loading checkpoint shards: X/9" messages
+```
+
 #### Start the Server
 ```bash
-# Start with default settings
+# Start with default settings (be patient, takes 10-15 minutes)
 ./run.sh serve
 
 # Or with custom host/port
 python main.py serve --host 0.0.0.0 --port 8000
 ```
 
-The server will be available at `http://localhost:8000`
+The server will be available at `http://localhost:8000` **after model loads**
 API documentation at `http://localhost:8000/docs`
 
 #### Test API Endpoints
@@ -539,8 +554,9 @@ class CustomExpertManager(ExpertCacheManager):
 ## 📊 Performance Expectations
 
 ### Baseline Metrics (RTX 4090 + 100GB RAM)
-- **Tokens/Second**: 8-12 (target), 10.5 (achieved average)
-- **First Token Latency**: 2-5 seconds
+- **Model Loading Time**: 10-15 minutes (40GB model, 9 checkpoint shards)
+- **Tokens/Second**: 8-12 (target), actual TBD after full load
+- **First Token Latency**: 2-5 seconds (after model is loaded)
 - **Memory Usage**: 13-14GB VRAM, 80-90GB RAM
 - **Expert Cache Hit Rate**: 70-85%
 
@@ -552,6 +568,20 @@ class CustomExpertManager(ExpertCacheManager):
 5. **Use streaming** for better perceived performance
 
 ## 🐛 Common Issues and Solutions
+
+### Issue: Model Loading Takes Forever
+```bash
+# Expected behavior: Model loading takes 10-15 minutes for 40GB model
+# Progress indicator: Look for "Loading checkpoint shards: X/9" in logs
+# Solution: Be patient, this is normal. Each shard takes ~77 seconds
+
+# To speed up future loads:
+# 1. Keep model files in RAM cache (if you have 128GB+ RAM)
+# 2. Use SSD instead of HDD for model storage
+# 3. Install optional acceleration libraries (complex):
+#    - flash-linear-attention
+#    - causal-conv1d
+```
 
 ### Issue: Model Not Found
 ```bash
