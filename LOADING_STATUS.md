@@ -1,7 +1,10 @@
 # Model Loading Status
 
 ## Current Status
-The model loading issues have been resolved. The server can now start loading the Qwen3-Next-80B model without device mapping errors.
+The model loading has been partially fixed but still faces challenges:
+- ✅ Device mapping errors resolved
+- ⚠️ CUDA OOM can still occur with default settings
+- ⏳ Loading is slow (10-15 minutes, CPU-bound)
 
 ## Issues Fixed
 
@@ -29,10 +32,17 @@ The model loading issues have been resolved. The server can now start loading th
 
 ## Current Loading Behavior
 
-The model now loads successfully but **SLOWLY**:
-- Loading takes approximately 10-15 minutes for the 40GB model
-- Each checkpoint shard takes ~77 seconds to load
-- This is normal for such a large model without optimized libraries
+The model loads but faces two main challenges:
+
+### 1. CUDA Memory Management
+- **Issue**: Sequential device mapping still uses ~12GB VRAM during loading
+- **Solution**: Set conservative memory limits (8GB max)
+- **Note**: May still OOM if other processes are using GPU
+
+### 2. Loading Speed
+- **Issue**: Loading takes 10-15 minutes (100+ seconds per shard)
+- **Cause**: CPU-bound, single-threaded safetensors loading
+- **Note**: Multi-threading doesn't help due to library limitations
 
 ## Performance Optimizations Needed
 
@@ -45,13 +55,19 @@ To speed up loading:
 ## How to Test
 
 ```bash
+# IMPORTANT: Check GPU memory is free first!
+nvidia-smi
+
+# Kill any Python processes using GPU if needed
+# Look for python processes in nvidia-smi output
+
 # Start the server (be patient, it takes 10-15 minutes to load)
 ./run.sh serve
 
-# Monitor loading progress
+# Monitor loading progress in another terminal
 tail -f server.log
-
 # Look for "Loading checkpoint shards: X/9" messages
+# Each shard takes ~100 seconds
 ```
 
 ## Memory Requirements Confirmed

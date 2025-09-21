@@ -25,7 +25,7 @@ If any check fails, see the Installation section below.
 - **OS**: Linux (tested on Arch Linux)
 - **CUDA**: 11.8 or higher
 - **Python**: 3.9+
-- **Disk Space**: ~40GB for model weights
+- **Disk Space**: ~40GB for model weights (64GB recommended)
 
 ### Verify System Resources
 ```bash
@@ -59,7 +59,7 @@ chmod +x install.sh run.sh
 
 ### Step 2: Activate Virtual Environment
 ```bash
-# The project uses .venv (not venv)
+# The project uses `uv` and .venv (not venv)
 uv venv
 source .venv/bin/activate
 

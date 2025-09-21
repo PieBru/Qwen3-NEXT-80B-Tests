@@ -44,10 +44,9 @@ class ModelLoader:
         if not self._check_memory_requirements():
             raise RuntimeError("Insufficient memory for model loading")
 
-        # Use auto device mapping for now - it's more reliable
-        # We can optimize with custom mapping later
-        self.device_map = "auto"
-        logger.info("Using auto device mapping for initial setup")
+        # Use sequential device mapping to control memory usage
+        self.device_map = "sequential"
+        logger.info("Using sequential device mapping to avoid OOM")
 
         # No BitsAndBytes config needed - model is already quantized
         # bnb_config = self._create_bnb_config()
@@ -90,11 +89,25 @@ class ModelLoader:
                     logger.info("Updated model config to enable CPU offloading")
 
         try:
+            # Use very conservative memory limits to avoid CUDA OOM
+            # Reserve most memory for activations and KV cache
+            conservative_max_memory = {
+                0: "8GB",  # Very conservative, only for essential components
+                "cpu": "100GB"
+            }
+
+            # Set environment variables for better performance
+            import os
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
+            # Note: Safetensors loading is inherently single-threaded
+            # Multi-threading doesn't help with checkpoint loading
+
             # The model config has been updated, now load without extra quantization params
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name_or_path,
                 device_map=self.device_map,
-                max_memory=self.config.memory.max_memory_mapping,
+                max_memory=conservative_max_memory,
                 dtype=self.config.quantization.bnb_4bit_compute_dtype,
                 trust_remote_code=self.config.quantization.trust_remote_code,
                 low_cpu_mem_usage=self.config.quantization.low_cpu_mem_usage,
@@ -127,6 +140,26 @@ class ModelLoader:
             num_experts=self.config.model.num_experts,
             model_type="qwen3"
         )
+
+    def _create_conservative_device_map(self) -> Dict[str, any]:
+        """Create a conservative device map that minimizes GPU usage to avoid OOM"""
+        device_map = {}
+
+        # Only put the absolute essentials on GPU
+        # Embeddings and final layers are small enough
+        device_map["model.embed_tokens"] = 0
+        device_map["model.norm"] = 0
+        device_map["lm_head"] = 0
+
+        # Put ALL layers on CPU to avoid CUDA OOM
+        # We'll rely on CPU offloading for now
+        for i in range(self.config.model.num_layers):
+            device_map[f"model.layers.{i}"] = "cpu"
+
+        logger.info(f"Conservative device map: {len([v for v in device_map.values() if v == 0])} components on GPU, "
+                   f"{len([v for v in device_map.values() if v == 'cpu'])} on CPU")
+
+        return device_map
 
     def _create_bnb_config(self) -> BitsAndBytesConfig:
         """Create BitsAndBytes quantization configuration with CPU offloading support"""
