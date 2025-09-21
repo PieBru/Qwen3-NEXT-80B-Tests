@@ -12,7 +12,7 @@ import json
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import SystemConfig
+from config import SystemConfig
 
 logging.basicConfig(
     level=logging.INFO,

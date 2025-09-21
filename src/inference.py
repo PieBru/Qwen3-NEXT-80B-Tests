@@ -11,13 +11,13 @@ import logging
 import psutil
 from concurrent.futures import ThreadPoolExecutor
 
-from src.expert_manager import (
+from expert_manager import (
     ExpertProfiler,
     DynamicExpertLoader,
     ExpertSwapScheduler,
     PredictiveExpertPreloader
 )
-from src.moe_utils import MemoryMonitor
+from moe_utils import MemoryMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +251,7 @@ class StreamingGenerator:
         if torch.cuda.is_available():
             # Keep on CPU to match model device
             # input_ids = input_ids.cuda()
+            pass
 
         # Generate token by token
         generated = []

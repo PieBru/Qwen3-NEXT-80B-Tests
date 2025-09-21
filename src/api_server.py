@@ -13,9 +13,9 @@ import json
 import logging
 from datetime import datetime
 
-from src.inference import MoEInferencePipeline
-from src.model_loader import ModelLoader
-from src.config import default_config
+from inference import MoEInferencePipeline
+from model_loader import ModelLoader
+from config import default_config
 
 logger = logging.getLogger(__name__)
 

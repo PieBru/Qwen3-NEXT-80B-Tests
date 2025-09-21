@@ -1,16 +1,7 @@
 # Comprehensive Testing Guide for Qwen3-80B MoE Implementation
 
-**✅ STATUS: FULLY WORKING - Model loading, caching, and inference confirmed operational!**
-
-This guide will help you test and experiment with the Qwen3-80B MoE BitsAndBytes implementation, which is now fully functional with fast cached loading (~22 seconds) and successful inference.
-
-## 🎉 Current Working Status
-
-- **Model Loading**: ✅ Fixed - Loads from cache in ~22 seconds
-- **First Load**: ~8-10 minutes (creating cache)
-- **Inference**: ✅ Working - Successfully tested ("2+2=4")
-- **Caching**: ✅ Enabled - 40GB cache file for instant restarts
-- **API Server**: ✅ Operational - All endpoints functional
+This guide will help you test and experiment with the Qwen3-80B MoE BitsAndBytes implementation, which is now fully functional with cached loading (less than 30 seconds on my gaming laptop) and successful inference.
+⚡ **CACHED LOADING**: After first load, model caching enables ~22 second restart time!
 
 ## ⚠️ Pre-Testing Checklist
 
@@ -24,8 +15,6 @@ Before starting any tests, ensure:
 - [ ] **Time allocated**: First model load takes 8-10 minutes (subsequent loads: ~22 seconds)
 
 If any check fails, see the Installation section below.
-
-⚡ **FAST LOADING**: After first load, model caching enables ~22 second restart time!
 
 ## 📋 Prerequisites
 
@@ -160,7 +149,7 @@ pytest tests/ --cov=src --cov-report=html
 
 **✅ CONFIRMED WORKING**: These curl commands have been tested and work successfully!
 
-⚡ **Loading Time**:
+⚡ **Loading Time** on my gaming laptop (RTX-4090-16GB, RAM=128GB, SSD perf=7.5GB/s):
 - **First load**: ~8-10 minutes (creates cache)
 - **Subsequent loads**: ~22 seconds (from cache)
 
