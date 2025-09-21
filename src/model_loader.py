@@ -44,9 +44,10 @@ class ModelLoader:
         if not self._check_memory_requirements():
             raise RuntimeError("Insufficient memory for model loading")
 
-        # Use sequential device mapping to control memory usage
-        self.device_map = "sequential"
-        logger.info("Using sequential device mapping to avoid OOM")
+        # Use balanced device mapping to properly materialize tensors
+        # Sequential can cause meta tensor issues
+        self.device_map = "balanced"
+        logger.info("Using balanced device mapping")
 
         # No BitsAndBytes config needed - model is already quantized
         # bnb_config = self._create_bnb_config()
@@ -104,14 +105,15 @@ class ModelLoader:
             # Multi-threading doesn't help with checkpoint loading
 
             # The model config has been updated, now load without extra quantization params
+            # Note: Don't use dtype parameter with pre-quantized models, it can cause meta tensor issues
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name_or_path,
                 device_map=self.device_map,
                 max_memory=conservative_max_memory,
-                dtype=self.config.quantization.bnb_4bit_compute_dtype,
                 trust_remote_code=self.config.quantization.trust_remote_code,
                 low_cpu_mem_usage=self.config.quantization.low_cpu_mem_usage,
                 offload_folder=str(self.config.offload_dir),
+                offload_state_dict=True,  # Ensure tensors are materialized
                 cache_dir=self.config.cache_dir
             )
             logger.info("Model loaded successfully")

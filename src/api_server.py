@@ -290,8 +290,10 @@ async def startup_event():
 
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
-        # Continue without model for testing
-        app.state.model_service = ModelService()
+        logger.error("Cannot start server without a working model. Exiting...")
+        # Exit with error code - server should not start if model fails to load
+        import sys
+        sys.exit(1)
 
 
 @app.get("/")
