@@ -2,6 +2,18 @@
 
 This guide will help you practice with the Qwen3-80B MoE BitsAndBytes implementation before creating your own experiments.
 
+## ⚠️ Pre-Testing Checklist
+
+Before starting any tests, ensure:
+
+- [ ] **Model downloaded**: Check with `python src/download_model.py`
+- [ ] **Virtual environment activated**: `source .venv/bin/activate`
+- [ ] **GPU available**: Run `nvidia-smi` to verify CUDA GPU
+- [ ] **Sufficient memory**: Need ~14GB VRAM + ~90GB RAM available
+- [ ] **Dependencies installed**: Try `python -c "import torch; print(torch.cuda.is_available())"`
+
+If any check fails, see the Installation section below.
+
 ## 📋 Prerequisites
 
 ### System Requirements
@@ -10,6 +22,7 @@ This guide will help you practice with the Qwen3-80B MoE BitsAndBytes implementa
 - **OS**: Linux (tested on Arch Linux)
 - **CUDA**: 11.8 or higher
 - **Python**: 3.9+
+- **Disk Space**: ~40GB for model weights
 
 ### Verify System Resources
 ```bash
@@ -21,6 +34,9 @@ free -h
 
 # Check CUDA version
 nvcc --version
+
+# Check disk space
+df -h .
 ```
 
 ## 🛠️ Installation
@@ -29,50 +45,43 @@ nvcc --version
 ```bash
 # Clone the repository
 git clone https://github.com/PieBru/Qwen3-NEXT-80B-Tests.git
-cd Qwen3-NEXT-80B-Tests
+cd Qwen3-80B_test
 
 # Make scripts executable
-chmod +x install.sh run.sh setup_hf.sh
+chmod +x install.sh run.sh
 
-# Install uv package manager (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.cargo/bin:$PATH"
-
-# Run installation (uses uv pip automatically)
+# Install dependencies (creates .venv automatically)
 ./install.sh
 ```
 
 ### Step 2: Activate Virtual Environment
 ```bash
-# The project uses .venv by default
+# The project uses .venv (not venv)
 source .venv/bin/activate
 
 # Verify activation
 which python  # Should show .venv/bin/python
 ```
 
-### Step 3: Authenticate with HuggingFace
-```bash
-# Login to HuggingFace (required for model download)
-huggingface-cli login
+### Step 3: Download the Model (~40GB)
 
-# Enter your HuggingFace token when prompted
+**Option A: Using the download script (recommended)**
+```bash
+./run.sh download-model
+# or
+python src/download_model.py --download
 ```
 
-### Step 4: Download the Model
+**Option B: Using huggingface-cli directly**
 ```bash
-# Option 1: Use the setup script
-./setup_hf.sh
+huggingface-cli download unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit \
+  --local-dir models/qwen3-80b-bnb
+```
 
-# Option 2: Manual download with Python
-python -c "
-from transformers import AutoModelForCausalLM, AutoTokenizer
-model_name = 'unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit'
-print('Downloading model (40GB)... This will take time!')
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
-print('Download complete!')
-"
+**Verify the download:**
+```bash
+python src/download_model.py
+# Should show "✓ Model found locally!"
 ```
 
 ## 🧪 Testing Workflows
@@ -102,6 +111,8 @@ This verifies:
 #### Run All Tests
 ```bash
 ./run.sh test
+# or
+pytest tests/ -v
 ```
 
 #### Run Specific Test Categories
@@ -120,6 +131,9 @@ pytest tests/test_api.py -v
 
 # Performance tests
 pytest tests/test_performance.py -v
+
+# Inference pipeline tests
+pytest tests/test_inference.py -v
 ```
 
 #### Test Coverage Report
@@ -129,6 +143,8 @@ pytest tests/ --cov=src --cov-report=html
 ```
 
 ### 3. Inference Testing
+
+⚠️ **Note**: Model must be downloaded before running these commands!
 
 #### Simple Text Generation
 ```bash
@@ -158,6 +174,9 @@ pytest tests/ --cov=src --cov-report=html
 # Or with custom host/port
 python main.py serve --host 0.0.0.0 --port 8000
 ```
+
+The server will be available at `http://localhost:8000`
+API documentation at `http://localhost:8000/docs`
 
 #### Test API Endpoints
 
@@ -243,6 +262,7 @@ import time
 
 # Load model
 config = SystemConfig()
+config.model.local_model_path = "models/qwen3-80b-bnb"  # Use local path
 loader = ModelLoader(config)
 model, tokenizer = loader.load_model()
 
@@ -277,6 +297,7 @@ for prompt in prompts:
 ```python
 # save as test_cache_sizes.py
 import json
+from pathlib import Path
 
 # Test configurations
 configs = [
@@ -287,12 +308,21 @@ configs = [
 
 for i, config in enumerate(configs):
     # Save config
+    config_data = {
+        "memory": config,
+        "model": {"local_model_path": "models/qwen3-80b-bnb"}
+    }
     with open(f"config_{i}.json", "w") as f:
-        json.dump({"memory": config}, f)
+        json.dump(config_data, f)
 
     # Run benchmark
     print(f"Testing config {i}: {config}")
-    !python main.py benchmark --config config_{i}.json --output results/config_{i}
+    import subprocess
+    subprocess.run([
+        "python", "main.py", "benchmark",
+        "--config", f"config_{i}.json",
+        "--output", f"results/config_{i}"
+    ])
 ```
 
 #### Monitor Memory During Inference
@@ -376,16 +406,19 @@ import sys
 sys.path.insert(0, 'src')
 from model_loader import ModelLoader
 from config import SystemConfig
+from pathlib import Path
 
 config = SystemConfig()
+config.model.local_model_path = "models/qwen3-80b-bnb"
+config.model_dir = Path("models/qwen3-80b-bnb")
 loader = ModelLoader(config)
 
-print("Loading model...")
+print("Loading model from:", config.model_dir)
 model, tokenizer = loader.load_model()
 
 print("\nModel info:")
 print(f"Model type: {type(model)}")
-print(f"Device map: {model.hf_device_map}")
+print(f"Device map keys: {list(model.hf_device_map.keys())[:5]}...")
 print(f"Tokenizer vocab size: {len(tokenizer)}")
 
 # Check expert placement
@@ -415,8 +448,10 @@ sys.path.insert(0, 'src')
 from model_loader import ModelLoader
 from inference import MoEInferencePipeline
 from config import SystemConfig
+import logging
 
 config = SystemConfig()
+config.model.local_model_path = "models/qwen3-80b-bnb"
 loader = ModelLoader(config)
 model, tokenizer = loader.load_model()
 
@@ -427,7 +462,6 @@ pipeline = MoEInferencePipeline(
 )
 
 # Enable detailed logging
-import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Generate text and watch expert swaps
@@ -448,12 +482,11 @@ print(f"Hit rate: {stats.get('cache_hit_rate', 0):.2%}")
 ## 🎯 Creating Your Own Experiments
 
 ### 1. Custom Configuration
-```python
-# custom_config.json
+```json
 {
   "model": {
     "model_name": "unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit",
-    "trust_remote_code": true
+    "local_model_path": "models/qwen3-80b-bnb"
   },
   "memory": {
     "gpu_memory_gb": 14.0,
@@ -468,8 +501,10 @@ print(f"Hit rate: {stats.get('cache_hit_rate', 0):.2%}")
     "repetition_penalty": 1.1
   }
 }
+```
 
-# Use custom config
+Use custom config:
+```bash
 python main.py generate "Test" --config custom_config.json
 ```
 
@@ -500,28 +535,6 @@ class CustomExpertManager(ExpertCacheManager):
         return recent_uses < threshold
 ```
 
-### 3. Custom Inference Pipeline
-```python
-# save as custom_pipeline.py
-import sys
-sys.path.insert(0, 'src')
-from inference import MoEInferencePipeline
-
-class CustomPipeline(MoEInferencePipeline):
-    def preprocess_prompt(self, prompt: str):
-        """Add custom preprocessing"""
-        # Example: Add instruction prefix
-        return f"[INST] {prompt} [/INST]"
-
-    def postprocess_output(self, output: str):
-        """Add custom postprocessing"""
-        # Example: Clean up output
-        output = output.strip()
-        if output.endswith("[/INST]"):
-            output = output[:-7]
-        return output
-```
-
 ## 📊 Performance Expectations
 
 ### Baseline Metrics (RTX 4090 + 100GB RAM)
@@ -539,24 +552,24 @@ class CustomPipeline(MoEInferencePipeline):
 
 ## 🐛 Common Issues and Solutions
 
-### Issue: CUDA Out of Memory
+### Issue: Model Not Found
 ```bash
-# Solution: Reduce expert cache size
-python -c "
-import json
-config = {'memory': {'experts_vram_gb': 2.0, 'cached_experts_per_layer': 2}}
-with open('reduced_memory.json', 'w') as f:
-    json.dump(config, f)
-"
-python main.py serve --config reduced_memory.json
+# Error: Model not found at models/qwen3-80b-bnb
+# Solution: Download the model first
+./run.sh download-model
+```
+
+### Issue: CUDA Out of Memory
+```python
+# Solution: Reduce expert cache size in src/config.py
+# Edit MemoryConfig class:
+experts_vram_gb = 2.0  # Reduce from 4.0
+cached_experts_per_layer = 2  # Reduce from 3
 ```
 
 ### Issue: Slow First Inference
 ```python
 # Solution: Warmup the model
-from model_loader import ModelLoader
-# ... load model ...
-# Warmup inference
 pipeline.generate("Hello", max_new_tokens=10)  # Warmup
 # Now ready for actual use
 ```
@@ -564,10 +577,15 @@ pipeline.generate("Hello", max_new_tokens=10)  # Warmup
 ### Issue: Import Errors
 ```bash
 # Solution: Ensure virtual environment is activated
-source .venv/bin/activate
-# Reinstall dependencies
-export UV_LINK_MODE=copy
-uv pip install -r requirements.txt
+source .venv/bin/activate  # Note: .venv not venv
+# Reinstall if needed
+./install.sh
+```
+
+### Issue: Permission Denied on Scripts
+```bash
+# Solution: Make scripts executable
+chmod +x run.sh install.sh
 ```
 
 ## 🎓 Learning Resources
@@ -576,7 +594,7 @@ uv pip install -r requirements.txt
 1. Review `src/moe_utils.py` - Core MoE device mapping
 2. Study `src/expert_manager.py` - Expert caching logic
 3. Examine `src/inference.py` - Inference pipeline
-4. Check `docs/` folder for architecture decisions
+4. Check `.claude/CLAUDE.md` for implementation details
 
 ### Key Concepts
 - **MoE (Mixture of Experts)**: 80B parameters, 3B active per forward pass
@@ -588,20 +606,33 @@ uv pip install -r requirements.txt
 
 After familiarizing yourself with the testing workflows:
 
-1. **Benchmark your hardware** - Run full benchmark suite
-2. **Profile your use case** - Identify common expert patterns
-3. **Optimize configuration** - Tune for your specific needs
-4. **Create custom experiments** - Build on the foundation
-5. **Contribute improvements** - Submit PRs with enhancements
+1. **Verify model download** - Ensure model is in `models/qwen3-80b-bnb/`
+2. **Run memory check** - Confirm your hardware meets requirements
+3. **Try simple generation** - Start with basic prompts
+4. **Benchmark your hardware** - Run full benchmark suite
+5. **Profile your use case** - Identify common expert patterns
+6. **Optimize configuration** - Tune for your specific needs
+7. **Create custom experiments** - Build on the foundation
 
-## 📝 Notes
+## 📝 Important Notes
 
-- Always activate the virtual environment (`.venv`) before running commands
-- Model download (~40GB) is one-time, cached in `~/.cache/huggingface/`
-- Use `uv pip` instead of `pip` for all package installations
-- Monitor GPU memory with `nvidia-smi` during experiments
-- Check `CLAUDE.md` for additional implementation details
+- **Virtual environment**: Always use `.venv` (not `venv`)
+- **Model location**: Local model at `models/qwen3-80b-bnb/` (~40GB)
+- **Package manager**: Use `uv pip` instead of `pip`
+- **Memory monitoring**: Keep `nvidia-smi` running during tests
+- **Configuration**: Check `.claude/CLAUDE.md` for details
+- **Model source**: Alibaba's Qwen3-Next-80B quantized by Unsloth
+
+## ⚠️ Safety Reminders
+
+- **Never run tests without checking memory first** - OOM can crash system
+- **Start with small `max_tokens` values** - Increase gradually
+- **Monitor GPU temperature** - Heavy load can cause thermal throttling
+- **Save work before testing** - In case of system instability
+- **Use lower batch sizes initially** - Scale up after verification
 
 ---
 
-*Happy experimenting with Qwen3-80B MoE implementation!*
+*Happy experimenting with Qwen3-80B MoE implementation! 🚀*
+
+*For issues, see: https://github.com/PieBru/Qwen3-NEXT-80B-Tests/issues*
