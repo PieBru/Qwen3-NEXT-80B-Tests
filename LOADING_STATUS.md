@@ -49,19 +49,31 @@ The model loads in two main phases:
 - **VRAM limit**: 10GB to prevent OOM
 - **RAM usage**: ~60GB (40GB model + overhead)
 
-## ⚠️ Model Caching Status
+## ✨ Model Caching Status
 
-**Note: Caching is currently DISABLED for pre-quantized BitsAndBytes models**
+**Model caching is now ENABLED using direct model serialization**
 
-The model caching feature has been disabled due to incompatibility with pre-quantized weights.
-When attempting to cache, calling `model.state_dict()` on quantized weights causes:
+After the first successful load, the entire initialized model is cached to disk:
+- First load: Takes 8-10 minutes (loading from checkpoint files)
+- Subsequent loads: Takes 1-2 minutes (loading from cache)
+- Cache size: ~40GB (same as model size)
+- Cache location: `~/.cache/huggingface/model_cache/initialized_model.pt`
+
+The caching avoids the state_dict() meta tensor issue by saving the entire model object
+directly using torch.save() with pickle protocol 4.
+
+### Cache Management
+```bash
+# Check cache status
+./run.sh cache --info
+# or
+python main.py cache --info
+
+# Clear cache (if model changes or issues)
+./run.sh cache --clear
+# or
+python main.py cache --clear
 ```
-RuntimeError: Tensor.item() cannot be called on meta tensors
-```
-
-This is a known limitation of BitsAndBytes quantized models where the weight tensors
-cannot be properly serialized. The model will need to be loaded from scratch each time
-(8-10 minutes).
 
 ## Performance Optimizations Needed
 

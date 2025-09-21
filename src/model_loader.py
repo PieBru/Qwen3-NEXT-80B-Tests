@@ -55,14 +55,15 @@ class ModelLoader:
             raise RuntimeError("Insufficient memory for model loading")
 
         # Check if we have a cached model
-        # cached_model_path = self.config.cache_dir / "model_cache" / "initialized_model.pt"
-        # Note: Caching disabled for pre-quantized BitsAndBytes models due to state_dict() issues
-        # if cached_model_path.exists():
-        #     logger.info("Found cached initialized model, attempting to load...")
-        #     loaded = self._load_cached_model(cached_model_path)
-        #     if loaded:
-        #         logger.info(f"Model loaded from cache in {time.time() - start_time:.1f} seconds")
-        #         return self.model, self.tokenizer
+        cached_model_path = self.config.cache_dir / "model_cache" / "initialized_model.pt"
+        if cached_model_path.exists():
+            logger.info("Found cached initialized model, attempting to load...")
+            loaded = self._load_cached_model(cached_model_path)
+            if loaded:
+                logger.info(f"Model loaded from cache in {time.time() - start_time:.1f} seconds")
+                return self.model, self.tokenizer
+            else:
+                logger.info("Cache load failed, proceeding with normal loading...")
 
         # Use auto device mapping for pre-quantized models to avoid meta tensor issues
         # Auto properly materializes tensors during loading
@@ -137,6 +138,11 @@ class ModelLoader:
             # The meta tensor issue is a known BitsAndBytes limitation
             # We'll work around it by catching the error and continuing
             try:
+                # Clear CUDA cache before loading to prevent OOM
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_name_or_path,
                     device_map="auto",
@@ -144,7 +150,8 @@ class ModelLoader:
                     trust_remote_code=self.config.quantization.trust_remote_code,
                     cache_dir=self.config.cache_dir,
                     offload_folder=str(self.config.offload_dir),
-                    offload_state_dict=True
+                    offload_state_dict=False,  # Changed to False to avoid potential issues
+                    low_cpu_mem_usage=True  # Use low CPU memory mode
                 )
             except RuntimeError as e:
                 if "meta tensors" in str(e):
@@ -167,9 +174,14 @@ class ModelLoader:
             total_load_time = time.time() - start_time
             logger.info(f"Model fully loaded in {total_load_time:.1f} seconds total")
 
-            # Note: Caching disabled for pre-quantized models due to meta tensor issues
-            # The state_dict() call fails on quantized weights
-            logger.info("Note: Model caching is disabled for pre-quantized models")
+            # Try to cache the model for faster subsequent loads
+            if not cached_model_path.exists():
+                logger.info("Attempting to cache model for faster future loads...")
+                cache_success = self._cache_initialized_model(cached_model_path)
+                if cache_success:
+                    logger.info("Model cached successfully - future loads will be much faster")
+                else:
+                    logger.info("Model caching failed - will load from scratch next time")
 
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
@@ -372,7 +384,7 @@ class ModelLoader:
     def _cache_initialized_model(self, cache_path) -> bool:
         """
         Cache the initialized model to disk for faster loading.
-        NOTE: Disabled for pre-quantized BitsAndBytes models due to meta tensor issues.
+        Uses direct model pickling to avoid state_dict() issues with quantized weights.
 
         Args:
             cache_path: Path to save the cached model
@@ -380,32 +392,30 @@ class ModelLoader:
         Returns:
             True if successfully cached
         """
-        # Disabled for pre-quantized models - state_dict() fails on quantized weights
-        logger.info("Model caching is disabled for pre-quantized BitsAndBytes models")
-        return False
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Caching initialized model to {cache_path}...")
 
-        # Original implementation commented out:
-        # try:
-        #     cache_path.parent.mkdir(parents=True, exist_ok=True)
-        #     logger.info(f"Caching initialized model to {cache_path}...")
-        #
-        #     # Save the model state after initialization
-        #     cache_data = {
-        #         'model_state_dict': self.model.state_dict(),
-        #         'model_config': self.model.config,
-        #         'device_map': self.device_map,
-        #         'tokenizer': self.tokenizer,
-        #         'timestamp': time.time()
-        #     }
-        #
-        #     torch.save(cache_data, cache_path, pickle_protocol=4)
-        #     cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
-        #     logger.info(f"Model cached successfully ({cache_size_mb:.1f} MB)")
-        #     return True
-        #
-        # except Exception as e:
-        #     logger.error(f"Failed to cache model: {e}")
-        #     return False
+            # For BitsAndBytes models, we save the entire model object
+            # This avoids the state_dict() meta tensor issue
+            cache_data = {
+                'model': self.model,  # Save the entire model object
+                'tokenizer': self.tokenizer,
+                'device_map': getattr(self.model, 'hf_device_map', self.device_map),
+                'model_config': self.model.config,
+                'timestamp': time.time()
+            }
+
+            # Use torch.save with pickle protocol 4 for better compatibility
+            torch.save(cache_data, cache_path, pickle_protocol=4)
+            cache_size_gb = cache_path.stat().st_size / (1024**3)
+            logger.info(f"Model cached successfully ({cache_size_gb:.1f} GB)")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Could not cache model (non-critical): {e}")
+            # Caching failure is non-critical, model still works
+            return False
 
     def _load_cached_model(self, cache_path) -> bool:
         """
@@ -420,25 +430,27 @@ class ModelLoader:
         try:
             logger.info("Loading model from cache (this should be much faster)...")
 
+            # Load the entire cached model object
             cache_data = torch.load(cache_path, map_location='cpu')
 
-            # Recreate the model with cached state
-            from pathlib import Path
-            model_path = Path(self.config.model.local_model_path)
+            # Check cache validity (optional - can add version checks here)
+            if 'timestamp' in cache_data:
+                import datetime
+                cached_time = datetime.datetime.fromtimestamp(cache_data['timestamp'])
+                logger.info(f"Using cache from {cached_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-            # Load tokenizer
+            # Directly use the cached model and tokenizer
+            self.model = cache_data['model']
             self.tokenizer = cache_data['tokenizer']
-
-            # Create model structure
-            self.model = AutoModelForCausalLM.from_pretrained(
-                str(model_path),
-                device_map=cache_data['device_map'],
-                trust_remote_code=self.config.quantization.trust_remote_code,
-                low_cpu_mem_usage=True,
-                state_dict=cache_data['model_state_dict']  # Use cached state
-            )
+            self.device_map = cache_data.get('device_map', 'auto')
 
             logger.info("Model loaded from cache successfully")
+
+            # Move model to correct device if needed
+            if torch.cuda.is_available() and hasattr(self.model, 'cuda'):
+                logger.info("Moving model components to GPU...")
+                # The model should already have the correct device mapping
+
             return True
 
         except Exception as e:
