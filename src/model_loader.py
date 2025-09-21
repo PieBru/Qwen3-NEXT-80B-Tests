@@ -142,17 +142,29 @@ class ModelLoader:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
-            logger.info("Loading quantized model with CPU-first strategy to avoid meta tensor issues...")
+            logger.info("Loading quantized model with CPU-only strategy to avoid meta tensor issues...")
 
-            # Load model without device_map to avoid meta tensor errors
-            # This loads everything to CPU first
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name_or_path,
-                trust_remote_code=self.config.quantization.trust_remote_code,
-                cache_dir=self.config.cache_dir,
-                torch_dtype=torch.float16,  # Use fp16 for efficiency
-                low_cpu_mem_usage=False  # Load fully to CPU first
-            )
+            # Force CPU-only loading to avoid CUDA OOM and meta tensor issues
+            # Set CUDA_VISIBLE_DEVICES to empty temporarily
+            import os
+            original_cuda = os.environ.get('CUDA_VISIBLE_DEVICES', None)
+            os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+            try:
+                # Load model to CPU only
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name_or_path,
+                    device_map={'': 'cpu'},  # Explicitly force CPU
+                    trust_remote_code=self.config.quantization.trust_remote_code,
+                    cache_dir=self.config.cache_dir,
+                    low_cpu_mem_usage=True  # Use low memory mode
+                )
+            finally:
+                # Restore CUDA visibility
+                if original_cuda is not None:
+                    os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda
+                else:
+                    del os.environ['CUDA_VISIBLE_DEVICES']
 
             logger.info("Model loaded to CPU, now optimizing device placement...")
 
