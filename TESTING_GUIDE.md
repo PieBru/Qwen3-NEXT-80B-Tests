@@ -57,6 +57,7 @@ chmod +x install.sh run.sh
 ### Step 2: Activate Virtual Environment
 ```bash
 # The project uses .venv (not venv)
+uv venv
 source .venv/bin/activate
 
 # Verify activation

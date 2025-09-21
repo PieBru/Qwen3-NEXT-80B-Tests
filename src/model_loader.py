@@ -51,10 +51,20 @@ class ModelLoader:
         # Create BitsAndBytes configuration
         bnb_config = self._create_bnb_config()
 
+        # Determine model path (local or remote)
+        from pathlib import Path
+        model_path = Path(self.config.model.local_model_path)
+        if model_path.exists():
+            model_name_or_path = str(model_path)
+            logger.info(f"Using local model from: {model_name_or_path}")
+        else:
+            model_name_or_path = self.config.model.model_name
+            logger.info(f"Using remote model: {model_name_or_path}")
+
         # Load tokenizer
         logger.info("Loading tokenizer...")
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.config.model.model_name,
+            model_name_or_path,
             trust_remote_code=self.config.quantization.trust_remote_code,
             cache_dir=self.config.cache_dir
         )
@@ -63,7 +73,7 @@ class ModelLoader:
         logger.info("Loading model with MoE device mapping...")
         try:
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.config.model.model_name,
+                model_name_or_path,
                 quantization_config=bnb_config,
                 device_map=self.device_map,
                 max_memory=self.config.memory.max_memory_mapping,
@@ -101,12 +111,13 @@ class ModelLoader:
         )
 
     def _create_bnb_config(self) -> BitsAndBytesConfig:
-        """Create BitsAndBytes quantization configuration"""
+        """Create BitsAndBytes quantization configuration with CPU offloading support"""
         return BitsAndBytesConfig(
             load_in_4bit=self.config.quantization.load_in_4bit,
             bnb_4bit_quant_type=self.config.quantization.bnb_4bit_quant_type,
             bnb_4bit_use_double_quant=self.config.quantization.bnb_4bit_use_double_quant,
-            bnb_4bit_compute_dtype=self.config.quantization.bnb_4bit_compute_dtype
+            bnb_4bit_compute_dtype=self.config.quantization.bnb_4bit_compute_dtype,
+            llm_int8_enable_fp32_cpu_offload=self.config.quantization.llm_int8_enable_fp32_cpu_offload
         )
 
     def _check_memory_requirements(self) -> bool:

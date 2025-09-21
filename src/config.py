@@ -51,6 +51,7 @@ class QuantizationConfig:
     bnb_4bit_quant_type: str = "nf4"
     bnb_4bit_use_double_quant: bool = True
     bnb_4bit_compute_dtype: torch.dtype = torch.bfloat16
+    llm_int8_enable_fp32_cpu_offload: bool = True  # Enable CPU offloading for MoE
     low_cpu_mem_usage: bool = True
     trust_remote_code: bool = True
 
