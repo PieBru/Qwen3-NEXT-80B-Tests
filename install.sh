@@ -44,19 +44,19 @@ uv pip install git+https://github.com/huggingface/transformers.git@main
 
 # Install BitsAndBytes
 echo "Installing BitsAndBytes..."
-uv pip install bitsandbytes>=0.41.0
+uv pip install "bitsandbytes>=0.41.0"
 
 # Install other dependencies
 echo "Installing remaining dependencies..."
-uv pip install accelerate>=0.20.0
-uv pip install sentencepiece>=0.1.99
-uv pip install psutil>=5.9.0
-uv pip install numpy>=1.24.0
-uv pip install fastapi>=0.100.0
-uv pip install uvicorn>=0.23.0
-uv pip install pydantic>=2.0.0
-uv pip install websockets>=10.0
-uv pip install huggingface-hub>=0.17.0
+uv pip install "accelerate>=0.20.0"
+uv pip install "sentencepiece>=0.1.99"
+uv pip install "psutil>=5.9.0"
+uv pip install "numpy>=1.24.0"
+uv pip install "fastapi>=0.100.0"
+uv pip install "uvicorn>=0.23.0"
+uv pip install "pydantic>=2.0.0"
+uv pip install "websockets>=10.0"
+uv pip install "huggingface-hub>=0.17.0"
 
 # Install development dependencies
 echo "Installing development dependencies..."
