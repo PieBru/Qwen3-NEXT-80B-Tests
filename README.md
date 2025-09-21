@@ -245,6 +245,7 @@ Contributions are welcome! Please:
 
 ## 🙏 Acknowledgments
 
+- Alibaba Group for the Qwen3-Next-80B model (https://www.qwen3-next.org/)
 - Unsloth team for the pre-quantized BnB model
 - HuggingFace for the transformers library
 - BitsAndBytes team for quantization support
