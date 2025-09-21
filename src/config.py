@@ -24,8 +24,8 @@ class ModelConfig:
 class MemoryConfig:
     """Memory allocation configuration"""
     # GPU VRAM allocation
-    gpu_memory_gb: float = 10.0  # Conservative allocation to avoid CUDA OOM (was 14.0)
-    gpu_reserved_gb: float = 4.0  # Increased reserved space for KV cache and activations
+    gpu_memory_gb: float = 8.0  # Reduced to avoid meta tensor CUDA OOM issues
+    gpu_reserved_gb: float = 2.0  # Reserved space for KV cache and activations
 
     # CPU RAM allocation
     cpu_memory_gb: float = 60.0  # 60GB is sufficient for 40GB model + overhead

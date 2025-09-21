@@ -156,11 +156,33 @@ class ModelLoader:
             except RuntimeError as e:
                 if "meta tensors" in str(e):
                     logger.warning("Meta tensor error encountered, attempting fallback loading...")
-                    # Fallback: Load without device_map and handle manually
+
+                    # Clean up failed model attempt and free memory
+                    if hasattr(self, 'model'):
+                        del self.model
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                        import gc
+                        gc.collect()
+
+                    # Wait a bit for memory to be fully released
+                    import time
+                    time.sleep(2)
+
+                    # Fallback: Load with reduced GPU memory to prevent OOM
+                    # Use only 8GB for safety, let the rest go to CPU
+                    reduced_max_memory = {0: "8GB", "cpu": "100GB"}
+                    logger.info("Loading with reduced GPU memory allocation (8GB) to prevent OOM...")
+
                     self.model = AutoModelForCausalLM.from_pretrained(
                         model_name_or_path,
+                        device_map="auto",
+                        max_memory=reduced_max_memory,
                         trust_remote_code=self.config.quantization.trust_remote_code,
-                        cache_dir=self.config.cache_dir
+                        cache_dir=self.config.cache_dir,
+                        offload_folder=str(self.config.offload_dir),
+                        low_cpu_mem_usage=True
                     )
                 else:
                     raise

@@ -54,7 +54,9 @@ The model loads in two main phases:
 **Model caching is now ENABLED using direct model serialization**
 
 After the first successful load, the entire initialized model is cached to disk:
-- First load: Takes 8-10 minutes (loading from checkpoint files)
+- First load: Takes 10-15 minutes (loading from checkpoint files)
+  - Each checkpoint shard takes 80-150 seconds to load
+  - Progress shown as "Loading checkpoint shards: X/9"
 - Subsequent loads: Takes 1-2 minutes (loading from cache)
 - Cache size: ~40GB (same as model size)
 - Cache location: `~/.cache/huggingface/model_cache/initialized_model.pt`
