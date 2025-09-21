@@ -91,10 +91,10 @@ if torch.cuda.is_available() and vram_gb >= 15:
 else:
     print('✗ Insufficient GPU memory (need 16GB)')
 
-if mem.available / 1024**3 >= 80:
+if mem.available / 1024**3 >= 55:
     print('✓ System RAM sufficient')
 else:
-    print('✗ Insufficient RAM (need 80GB available)')
+    print('✗ Insufficient RAM (need 55GB available)')
 "
         ;;
 

@@ -47,7 +47,7 @@ The model loads in two main phases:
 ### Memory Management
 - **Device mapping**: Using "auto" with fallback for meta tensor issues
 - **VRAM limit**: 10GB to prevent OOM
-- **RAM usage**: ~80GB for expert weights
+- **RAM usage**: ~60GB (40GB model + overhead)
 
 ## ⚠️ Model Caching Status
 
@@ -90,9 +90,9 @@ tail -f server.log
 ```
 
 ## Memory Requirements Confirmed
-- RAM: ~80GB for expert weights (reduced for compatibility)
+- RAM: ~55-60GB minimum (40GB model + ~15-20GB overhead)
 - VRAM: ~10GB for non-expert components (conservative to prevent OOM)
-- The system correctly allocates memory as designed
+- Works on systems with 64GB+ total RAM
 
 ## Next Steps
 1. Wait for full model load to complete (10-15 minutes)

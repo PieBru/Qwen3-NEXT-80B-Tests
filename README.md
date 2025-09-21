@@ -25,8 +25,8 @@ A high-performance local deployment solution for Qwen3-Next-80B-A3B-Instruct wit
 ### Requirements
 
 - Python 3.9+
-- CUDA 11.8+ compatible GPU (RTX 4090 or similar)
-- 100+ GB system RAM
+- CUDA 11.8+ compatible GPU (RTX 4090 or similar with 16GB+ VRAM)
+- 64+ GB system RAM (55GB+ available)
 - Linux (tested on Arch Linux)
 - ~40GB disk space for model weights
 

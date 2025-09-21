@@ -28,7 +28,7 @@ class MemoryConfig:
     gpu_reserved_gb: float = 4.0  # Increased reserved space for KV cache and activations
 
     # CPU RAM allocation
-    cpu_memory_gb: float = 80.0  # Reduced from 90GB to work with available RAM
+    cpu_memory_gb: float = 60.0  # 60GB is sufficient for 40GB model + overhead
     cpu_buffer_gb: float = 10.0  # Buffer for expert swapping
 
     # Expert caching

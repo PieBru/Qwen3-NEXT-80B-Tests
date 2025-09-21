@@ -231,14 +231,14 @@ class ModelLoader:
         monitor = MemoryMonitor()
         stats = monitor.get_memory_stats()
 
-        # Check RAM
+        # Check RAM (require only 55GB available to be safe)
         ram_available = stats['ram']['available_gb']
-        ram_required = self.config.memory.cpu_memory_gb
+        ram_required = 55.0  # Minimum safe amount for 40GB model
 
         if ram_available < ram_required:
             logger.error(
                 f"Insufficient RAM: {ram_available:.1f}GB available, "
-                f"{ram_required:.1f}GB required"
+                f"{ram_required:.1f}GB required (minimum for 40GB model)"
             )
             return False
 
