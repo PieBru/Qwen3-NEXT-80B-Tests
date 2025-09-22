@@ -1,2 +1,0 @@
-- TEST before claiming it works. False claims lead to firing both of us.
-- BEFORE CLAIMING it works, YOU MUST test the LLM loading and inference by verifying the correct LLM reply to a simple prompt.

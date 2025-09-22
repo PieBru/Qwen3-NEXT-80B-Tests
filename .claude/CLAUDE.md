@@ -169,3 +169,5 @@ Edit `src/config.py`:
 - All critical imports have been fixed (check git history if issues arise)
 - Expert swapping latency is critical for performance
 - This is experimental while waiting for llama.cpp support
+- TEST before claiming it works. False claims lead to firing both of us.
+- BEFORE CLAIMING it works, YOU MUST test the LLM loading and inference by verifying the correct LLM reply to a simple prompt.

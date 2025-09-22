@@ -12,23 +12,30 @@ from pathlib import Path
 class ModelConfig:
     """Model configuration parameters"""
     model_name: str = "unsloth/Qwen3-Next-80B-A3B-Instruct-bnb-4bit"
-    local_model_path: str = "models/qwen3-80b-bnb"  # Local model directory
+    local_model_path: str = "models/qwen3-80b-bnb"  # Local model directory (BNB 4-bit)
+    fp8_model_path: str = "models/qwen3-80b-fp8"  # FP8 quantized model directory
+    use_fp8_model: bool = False  # Set to True to use FP8 model instead of BNB
     num_layers: int = 48  # Actual number of layers from model config
     num_experts: int = 512  # Actual number of experts from model config
     num_activated_experts: int = 10  # num_experts_per_tok from config
     context_length: int = 262144
     vocab_size: int = 151936
 
+    @property
+    def active_model_path(self) -> str:
+        """Get the currently active model path based on configuration"""
+        return self.fp8_model_path if self.use_fp8_model else self.local_model_path
+
 
 @dataclass
 class MemoryConfig:
     """Memory allocation configuration"""
     # GPU VRAM allocation
-    gpu_memory_gb: float = 8.0  # Reduced to avoid meta tensor CUDA OOM issues
+    gpu_memory_gb: float = 14.0  # Increased for FP8 model (was 8.0 for BNB)
     gpu_reserved_gb: float = 2.0  # Reserved space for KV cache and activations
 
     # CPU RAM allocation
-    cpu_memory_gb: float = 60.0  # 60GB is sufficient for 40GB model + overhead
+    cpu_memory_gb: float = 90.0  # Increased for FP8 model (was 60.0 for BNB)
     cpu_buffer_gb: float = 10.0  # Buffer for expert swapping
 
     # Expert caching
